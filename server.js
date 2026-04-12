@@ -1,6 +1,6 @@
 const WebSocket = require('ws');
 
-const wss = new WebSocket.Server({ port: process.env.PORT || 8080 maxPayload: 10 * 1024 * 1024 });
+const wss = new WebSocket.Server({ port: process.env.PORT || 8080, maxPayload: 10 * 1024 * 1024 });
 
 const chatHistory = [];
 const MAX_HISTORY = 100; // how many messages to keep
