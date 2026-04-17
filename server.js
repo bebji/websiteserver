@@ -7,7 +7,13 @@ const MAX_HISTORY = 100; // how many messages to keep
 
 wss.on('connection', (ws) => {
     ws.username = null;
-
+    const name = ws.username || 'someone';
+    wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: 'message', text: `${name} disconnected` }));
+        };
+    });
+console.log('Server is running on port 8080');
 
     // Send chat history to the newly connected client
     if (chatHistory.length > 0) {
