@@ -23,6 +23,18 @@ console.log('Server is running on port 8080');
     ws.on('message', (data) => {
         const message = data.toString();
 
+            try {
+            const parsed = JSON.parse(message);
+            if (parsed.type === 'join') {
+                ws.username = parsed.user;
+                wss.clients.forEach((client) => {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({ type: 'message', text: `${parsed.user} connected` }));
+                    }
+                });
+                return;
+            }
+
         if (message.includes(': ')) {
             ws.username = message.split(': ')[0];
         }
