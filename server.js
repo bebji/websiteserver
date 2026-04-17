@@ -2,6 +2,7 @@ const WebSocket = require('ws');
 const wss = new WebSocket.Server({ port: process.env.PORT || 8080, maxPayload: 10 * 1024 * 1024 });
 const chatHistory = [];
 const MAX_HISTORY = 100;
+const admins = ["ben"]
 
 wss.on('connection', (ws) => {
     ws.username = null;
@@ -22,6 +23,7 @@ wss.on('connection', (ws) => {
                         client.send(JSON.stringify({ type: 'message', text: `${parsed.user} connected` }));
                     }
                 });
+                if(admins.includes(parsed.user)){wss.parsed.user.send(JSON.stringify({ type: 'admin'})) }
                 return;
             }
         } catch(e) {}
@@ -38,6 +40,7 @@ wss.on('connection', (ws) => {
         wss.clients.forEach((client) => {
             if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({ type: 'message', text: message }));
+                console.log(JSON.stringify({ type: 'message', text: message }));
             }
         });
     });
