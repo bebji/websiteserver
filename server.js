@@ -1,6 +1,10 @@
 const WebSocket = require('ws');
 const Redis = require('ioredis');
-const redis = new Redis(process.env.REDIS_URL);
+const redis = new Redis(process.env.REDIS_URL, {
+    tls: {
+        rejectUnauthorized: false
+    }
+});
 const wss = new WebSocket.Server({ port: process.env.PORT || 8080, maxPayload: 10 * 1024 * 1024 });
 const admins = ["ben"];
 wss.on('connection', async (ws) => {
