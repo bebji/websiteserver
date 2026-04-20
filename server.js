@@ -4,6 +4,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 
 const wss = new WebSocket.Server({ port: process.env.PORT || 8080, maxPayload: 10 * 1024 * 1024 });
 const admins = ["ben"];
+const muted = {};
 
 wss.on('connection', async (ws) => {
     ws.username = null;
@@ -36,6 +37,10 @@ wss.on('connection', async (ws) => {
                 return;
             }
             if (parsed.type === 'image') {
+                if (muted[ws.username] && Date.now() < muted[ws.username]) {
+                    ws.send(JSON.stringify({ type: 'message', text: 'You are muted.' }));
+                    return;
+                }
                 await supabase.from('messages').insert({ content: message });
                 wss.clients.forEach((client) => {
                     if (client.readyState === WebSocket.OPEN) {
@@ -44,7 +49,38 @@ wss.on('connection', async (ws) => {
                 });
                 return;
             }
+            if (parsed.type === 'mute') {
+                if (admins.includes(ws.username)) {
+                    const duration = parsed.duration * 1000;
+                    muted[parsed.target] = Date.now() + duration;
+                    wss.clients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({ type: 'message', text: `${parsed.target} has been muted for ${parsed.duration} seconds` }));
+                        }
+                    });
+                    // find the muted client and notify them
+                    wss.clients.forEach((client) => {
+                        if (client.username === parsed.target && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({ type: 'mute', target: parsed.target }));
+                        }
+                    });
+                    setTimeout(() => {
+                        delete muted[parsed.target];
+                        wss.clients.forEach((client) => {
+                            if (client.readyState === WebSocket.OPEN) {
+                                client.send(JSON.stringify({ type: 'message', text: `${parsed.target} has been unmuted` }));
+                            }
+                        });
+                    }, duration);
+                }
+                return;
+            }
         } catch(e) {}
+
+        if (muted[ws.username] && Date.now() < muted[ws.username]) {
+            ws.send(JSON.stringify({ type: 'message', text: 'You are muted.' }));
+            return;
+        }
 
         if (message.includes(': ')) {
             ws.username = message.split(': ')[0];
@@ -52,7 +88,6 @@ wss.on('connection', async (ws) => {
 
         await supabase.from('messages').insert({ content: message });
 
-        // keep only last 100 messages
         const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true });
         if (count > 100) {
             const { data: oldest } = await supabase
