@@ -1,23 +1,25 @@
 const WebSocket = require('ws');
-const Redis = require('ioredis');
-const redis = new Redis(process.env.REDIS_URL, {
-    tls: {
-        rejectUnauthorized: false
-    }
-});
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+
 const wss = new WebSocket.Server({ port: process.env.PORT || 8080, maxPayload: 10 * 1024 * 1024 });
 const admins = ["ben"];
+
 wss.on('connection', async (ws) => {
     ws.username = null;
 
-    const history = await redis.lrange('chatHistory', 0, 99);
-    if (history.length > 0) {
-        ws.send(JSON.stringify({ type: 'history', messages: history.reverse() }));
+    const { data: history } = await supabase
+        .from('messages')
+        .select('content')
+        .order('created_at', { ascending: true })
+        .limit(100);
+
+    if (history && history.length > 0) {
+        ws.send(JSON.stringify({ type: 'history', messages: history.map(m => m.content) }));
     }
 
     ws.on('message', async (data) => {
         const message = data.toString();
-
         try {
             const parsed = JSON.parse(message);
             if (parsed.type === 'ping') return;
@@ -33,14 +35,34 @@ wss.on('connection', async (ws) => {
                 }
                 return;
             }
+            if (parsed.type === 'image') {
+                // broadcast images but don't save to history
+                wss.clients.forEach((client) => {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({ type: 'message', text: message }));
+                    }
+                });
+                return;
+            }
         } catch(e) {}
 
         if (message.includes(': ')) {
             ws.username = message.split(': ')[0];
         }
 
-        await redis.lpush('chatHistory', message);
-        await redis.ltrim('chatHistory', 0, 99);
+        await supabase.from('messages').insert({ content: message });
+
+        // keep only last 100 messages
+        const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true });
+        if (count > 100) {
+            const { data: oldest } = await supabase
+                .from('messages')
+                .select('id')
+                .order('created_at', { ascending: true })
+                .limit(count - 100);
+            const ids = oldest.map(m => m.id);
+            await supabase.from('messages').delete().in('id', ids);
+        }
 
         wss.clients.forEach((client) => {
             if (client.readyState === WebSocket.OPEN) {
