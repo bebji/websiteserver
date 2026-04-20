@@ -32,6 +32,7 @@ wss.on('connection', async (ws) => {
                     }
                 });
                 if (admins.includes(parsed.user)) {
+                    console.log("admin found")
                     ws.send(JSON.stringify({ type: 'admin' }));
                 }
                 return;
