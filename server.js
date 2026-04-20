@@ -36,7 +36,7 @@ wss.on('connection', async (ws) => {
                 return;
             }
             if (parsed.type === 'image') {
-                // broadcast images but don't save to history
+                await supabase.from('messages').insert({ content: message });
                 wss.clients.forEach((client) => {
                     if (client.readyState === WebSocket.OPEN) {
                         client.send(JSON.stringify({ type: 'message', text: message }));
